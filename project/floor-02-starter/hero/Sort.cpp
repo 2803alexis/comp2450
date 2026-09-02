@@ -26,6 +26,89 @@
 #include <algorithm>  // you will want std::sort in sortInventory
 
 namespace dungeon {
+    namespace {
+        void merge(std::vector<Item>& v,
+            std::size_t low,
+            std::size_t mid,
+            std::size_t high,
+            const Comparator& cmp) {
+            //[low,mid)
+            //[mid,high)
+            std::vector<Item> scratch;
+            scratch.reserve(high - low);
+            //allocating capacity for high - low items up front
+
+            //two cursors each side
+            std::size_t i = low; //walk the left half
+            std::size_t j = mid; //walk the right half
+
+            //merge loop
+            //while both halves still have items, pick the smaller front-of-queque and append
+
+            while (i < mid && j < high) {
+                if (!cmp(v[j], v[i])) {
+                    scratch.push_back(v[i++]);
+                }
+                else {
+                    scratch.push_back(v[j++]);
+                }
+            }
+
+            // one half is drained but the other still has items
+
+            while (i < mid) scratch.push_back(v[i++]);
+            while (j < high) scratch.push_back(v[j++]);
+
+            //copy the merge result back into v at the positions [low, high)
+            for (std::size_t k = 0; k < scratch.size(); ++k) {
+                v[low + k] = std::move(scratch[k]);
+            }
+        }
+
+        void mergeSortImpl(std::vector<Item>& v,
+            std::size_t low, std::size_t high,
+            const Comparator& cmp) {
+            //base case
+            if (high - low < 2) return;
+            //recursion
+            std::size_t mid = low + (high - low) / 2;
+            mergeSortImpl(v, low, mid, cmp);
+            mergeSortImpl(v, mid, high, cmp);
+            merge(v, low, mid, high, cmp);
+        }
+
+        std::size_t partition(std::vector<Item>& v,
+        std::size_t low, std::size_t high, 
+        const Comparator& cmp) {
+            //high is our last index (inclusive)
+            //1.) pick the pivot
+            std::size_t mid = low + (high - low) / 2;
+            std::swap(v[mid], v[high]);
+            const Item pivot = v[high];
+            //compute middle index
+            //std::swap exchanges two items
+            //w/o copying the whole structural
+            //in Lomuto, assumes the pivot
+            //lives at high, so by moving
+            //our pivot there, we can follow
+            //classsic Lomuto
+
+            //Lomuto scan
+
+            std::size_t store = low; //boundary
+            // [low, store) --> strictly less than the pivot
+            // [store, high) --> >= pivot
+            for (std::size_t i = low; i < high; ++i) {
+                if (cmp(v[i], pivot)) {
+                    std::swap(v[store], v[i]);
+                    ++store;
+                }
+            }
+
+            std::swap(v[store], v[high]);
+        }
+    }
+}
 
 // ---- 1. Merge sort ------------------------------------------------------
 
@@ -112,6 +195,7 @@ void quicksort(std::vector<Item>& inventory, const Comparator& cmp) {
     // benchmark harness has a `--bad-pivot` option that runs exactly
     // that. You do NOT need to implement it yourself; the harness
     // ships its own copy for Lab purposes.
+
     (void)inventory;
     (void)cmp;
 }
