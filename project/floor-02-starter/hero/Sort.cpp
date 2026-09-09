@@ -24,6 +24,7 @@
 
 #include "Sort.h"
 #include <algorithm>  // you will want std::sort in sortInventory
+#include <sstream>
 
 namespace dungeon {
     namespace {
@@ -106,6 +107,47 @@ namespace dungeon {
             }
 
             std::swap(v[store], v[high]);
+            return store<
+        }
+
+        void quicksortImpl(std::vector<Item>& v,
+            std::size_t low, std::size_t high,
+            const Comparator & cmp) {
+            //base case
+            if (low >= high) return;
+            std::size_t p = partition(v, low, high, cmp)
+            if (p < low) quicksortImpl(v, low, p - 1, cmp;
+            quicksortImpl(v, p + 1, high, cmp);
+        }
+
+        Comparator makeComparator(const std::string& key,
+            bool descending) {
+            //std:: function<bool(const Item&, const Item&)>
+            Comparator cmp;
+            if (key == "name") {
+                cmp - [](const Item& a, const Item& b) {
+                    return a.name < b.name;
+                    };
+            }
+            else if (key == "weight") {
+                cmp - [](const Item& a, const Item& b) {
+                    return a.weight < b.weight;
+                    };
+            }
+            else if (key == "value") {
+                cmp - [](const Item& a, const Item& b) {
+                    return a.value < b.value;
+                    };
+            }
+            else return nullptr;
+
+            if (descending) {
+                Comparator asc = cmp;
+                cmp = [asc](const Item& a, const Item& b) {
+                    return asc(b, a);
+                    };
+
+            }
         }
     }
 }
@@ -237,6 +279,18 @@ bool sortInventory(Hero& hero, const std::string& criterion) {
     // Dispatch: for this week std::sort is the right production choice.
     // Your mergeSort and quicksort are correct too — pick one and
     // defend it in your commit message.
+    std::istringstream in(criterion);
+    std::string key;
+    std::string dir;
+    in >> key >> dir;
+
+    bool descending = (dir == "desc");
+    Comparator cmp = makeComparator(key, descending);
+    if (!cmp) return false;
+    std::sort(hero.inventory.begin(),
+        hero.inventory.end(), cmp);
+    return true;
+
     (void)hero;
     (void)criterion;
     return false;
