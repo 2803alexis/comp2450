@@ -97,6 +97,7 @@ public:
     // the destructor body if you prefer one source of truth.)
     ~Chain() {
         // TODO Floor 4 (Wednesday)
+        clear();
     }
 
     // -----------------------------------------------------------------
@@ -166,7 +167,15 @@ public:
     //
     // TODO Floor 4 (Wednesday). Same loop as the destructor.
     void clear() {
-        // TODO Wednesday
+        Node* p = head_; //start at the head
+        while (p != nullptr) {
+            // save the NEXT pointer into a loccal pointer first
+            Node* n = p->next;//save befor delete
+            delete p;//freeing the current node
+            p = n; //advance to the next saved
+        }
+        head_ = nullptr;//chain is gone... :(
+        size_ = 0;// so size is 0
     }
 
 private:
