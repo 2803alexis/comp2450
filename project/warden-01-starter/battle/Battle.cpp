@@ -61,10 +61,8 @@
 
 #include "Battle.h"
 
-#include <algorithm>
 #include <iostream>
 #include <string>
-#include <vector>
 
 #include "../hero/Bag.h"
 #include "../hero/BagException.h"
@@ -76,158 +74,225 @@ namespace dungeon {
 
     namespace {
 
-        const int kPlayerStartHP = 30;
-        const int kWardenStartHP = 50;
-        const int kPlayerAttackDmg = 6;
-        const int kWardenAttackDmg = 4;
+// =====================================================================
+// Tunable battle parameters. Edit to taste; document any tuning in
+// encounter-notes.md so the grader knows what to expect.
+// =====================================================================
+    constexpr int kPlayerStartHP   = 30;
+    constexpr int kWardenStartHP   = 50;
+    constexpr int kPlayerAttackDmg = 6;   // damage per Attack action
+    constexpr int kWardenAttackDmg = 4;   // warden's retaliation damage
 
-        struct BattleAction {
-            int id;
-            std::string description;
-        };
+    // enum creates a set of named choices
+    // enum class, keeps our names scoped
+    enum class MenuAction {
+        Attack,
+        UseItem,
+        Inspect,
+        Flee
+    };
+    // {1, "Attack, MenuAction::Attack}
 
-        // =====================================================================
-        // FLOOR 0 (ADT Requirement):
-        // ADT Choice: Vector / List (Sequence ADT).
-        // Defense: A sequential vector guarantees that the available turn actions maintain
-        // a fixed, ordered numerical menu for direct indexing, unlike an unordered Set or Bag.
-        // =====================================================================
-        const std::vector<BattleAction> kBattleActions = {
-            {1, "Attack"},
-            {2, "Use item"},
-            {3, "Inspect Warden"},
-            {4, "Flee"}
-        };
+    struct MenuOption {
+        int number;//number typed by the player
+        std::string label; //text displayed on the menu
+        MenuAction action; //action performed by the program
+    };
 
-    }  // anonymous namespace
+    void printMenu(
+        Bag<MenuOption>& menu,
+        int playerHP,
+        int wardenHP
+    ) {
+        std::cout << "\n -- Your Turn -- your hp" << playerHP
+            << "    Warden hp " << wardenHP << "\n";
+
+        for (std::size_t i = 0; i < menu.size(); ++i) {
+            // bag overload our operator[], allow menu[i]
+            // to retieve our menuoption at index i
+            std::cout << "      "
+                << menu[i].number
+                << ". "
+                << menu[i].label
+                << "\n";
+        }
+        std::cout << " > ";
+    }
+    // read the user's input and convert that into MenuAction
+    MenuAction readMenuChoice(const Bag<MenuOption>& menu) {
+        std::string line;
+        // getline will get the entire line up to the enter key
+        // if getline fails, standard input may have been close
+        // if problem... flee!
+        if (!std::getline(std::cin, line)) {
+            return MenuAction::Flee;
+        }
+
+        int n = -1;
+
+        try {
+            // "2" --> 2
+            // if the string can't be converted...
+            // stoi throw excp
+            n = std::stoi(line);
+        }
+
+        catch (...) {
+            throw BattleException(
+                "'" + line + "' is not a menu number (enter 1 to "
+                + std::to_string(menu.size()) + ")"
+            );
+        }
+        // search our menu for an option whose displayed number
+        // matches the number entered by the player
+        for (std::size_t i = 0; i < menu.size(), ++i) {
+            if (menu[i].number == n) {
+                return menu[i].action;
+            }
+        }
+
+        throw BagException(
+            static_cast<std::size_t>(n),
+            menu.size()
+        );
+
+    //handle the player's "use item" action
+    // Hero& will give the function access to the original hero object instead of a copy
+
+    void useItem(Hero& hero, int& playerHP) {
+        if (hero.inventory.empty()) {
+            std::cout << "Your satchel is empty.\n";
+            return;
+        }
+        sortInventory(hero, "value desc");
+        std::cout << "Choose an item by name:\n";
+        printInventory(hero);
+        std::cout << " > ";
+
+        std::string name;
+
+        // || short-circuit
+        // 1. try to read the line
+        // 2. if that succeds, then i will check whether the line is empty
+        // if either condition is true, the player does nothing
+
+        if (!std::getline(std::cin, name) || name.empty()) {
+            std::cout << "you hesitated. \n";
+            return;
+        }
+
+        //findbyName<Item>
+        const Item* it = findByName<Item>(hero.inventory, name);
+
+        if (!it) {
+            throw BattleException(
+                "no item found '" + name + "' in your satchel"
+            );
+        }
+        // if you say Potion, Healing Potion
+        if (it->name.find("otion") != std::string::npos) {
+            // heal 12 hp, but we dont need out healing to exceed our max health
+            playerHP = std::min(
+                playerHP + 12,
+                kPlayerStartHP
+            );
+            std::cout << " You drink "
+                << it->name
+                << ". HP -> "
+                << playerHP
+                << ".\n";
+        }
+        else {
+            std::cout << " You ready "
+                << it->name
+                << " - but it is not a consumable.\n";
+        }
+    }
+
 
     BattleOutcome runWardenBattle(Hero& hero) {
+        //create two variables for the player and warden; represent the state
         int playerHP = kPlayerStartHP;
+        
         int wardenHP = kWardenStartHP;
 
-        std::cout << "\n=== A WARDEN APPEARS! ===\n";
+        menu.pushback()
 
         while (playerHP > 0 && wardenHP > 0) {
-            std::cout << "\n[ Hero HP: " << playerHP << " | Warden HP: " << wardenHP << " ]\n";
-
             try {
-                // Display main menu using the Floor 0 action container
-                for (const auto& action : kBattleActions) {
-                    std::cout << "  " << action.id << ". " << action.description << "\n";
-                }
-                std::cout << "Choose action: ";
+                printMenu(menu, playerHP, wardenHP);
 
-                std::string input;
-                if (!(std::cin >> input)) {
-                    return BattleOutcome::Fled;
-                }
+                switch (readMenuChoice(menu)) {
+                    case MenuAction::Attack{
 
-                int choice = 0;
-                try {
-                    choice = std::stoi(input);
-                }
-                catch (...) {
-                    // =====================================================================
-                    // FLOOR 3 (Exceptions Requirement - Throw):
-                    // Throw BattleException on non-numeric or invalid input.
-                    // =====================================================================
-                    throw BattleException("Invalid choice: must enter a valid option number.");
-                }
+                    }
+                    case MenuAction::UseItem: {
+                        //lets use an item, yeah?
+                        useItem(hero, inventory);
+                        if (wardenHP > 0 && playerHP > 0) {
+                            playerHP -= kWardenAttackDmg;
 
-                if (choice < 1 || choice > static_cast<int>(kBattleActions.size())) {
-                    throw BattleException("Choice out of bounds: please select a listed option.");
-                }
-
-                if (choice == 1) { // Attack
-                    wardenHP -= kPlayerAttackDmg;
-                    std::cout << "  You strike the Warden for " << kPlayerAttackDmg << " damage!\n";
-
-                    if (wardenHP > 0) {
-                        playerHP -= kWardenAttackDmg;
-                        std::cout << "  The Warden retaliates for " << kWardenAttackDmg << " damage!\n";
+                            std::cout << "The warden strikes while you fumble"
+                                << std::max
+                                << " / "
+                                << kWardenStartHP
+                                << ". No visible weakness {free action}.\n";
+                            break;
+                        }
+                    case MenuAction::Flee: {
+                        return BattleOutcome::Fled;
+                    }
                     }
                 }
-                else if (choice == 2) { // Use item
-                    if (hero.inventory.empty()) {
-                        std::cout << "  Your inventory is empty!\n";
-                        continue; // Free action if no items available
-                    }
-
-                    // =====================================================================
-                    // FLOOR 2 (Sort Requirement):
-                    // Sort items at display time descending by item potency (value), 
-                    // which represents healing power in this codebase.
-                    // =====================================================================
-                    std::sort(hero.inventory.begin(), hero.inventory.end(),
-                        [](const Item& a, const Item& b) {
-                            return a.value > b.value;
-                        });
-
-                    std::cout << "  Available Items (Sorted by Potency/Value):\n";
-                    for (const auto& item : hero.inventory) {
-                        std::cout << "   - " << item.name << " (Potency: " << item.value
-                            << ", Weight: " << item.weight << ")\n";
-                    }
-
-                    std::cout << "Enter the name of the item to use: ";
-                    std::string itemName;
-                    std::cin.ignore();
-                    std::getline(std::cin, itemName);
-
-                    // =====================================================================
-                    // FLOOR 1 (Search Requirement):
-                    // Lookup item using findByName<Item> template function against hero.inventory.
-                    // =====================================================================
-                    const Item* foundItem = findByName<Item>(hero.inventory, itemName);
-
-                    if (!foundItem) {
-                        throw BattleException("Item '" + itemName + "' not found in inventory.");
-                    }
-
-                    std::cout << "  You used " << foundItem->name << " and restored "
-                        << foundItem->value << " HP!\n";
-                    playerHP += foundItem->value;
-
-                    // Enemy turn after consumable action
-                    playerHP -= kWardenAttackDmg;
-                    std::cout << "  The Warden retaliates for " << kWardenAttackDmg << " damage!\n";
+                catch (const std::exeption& e) {
+                    std::cout << e.what()
+                        << " - try again.\n";
                 }
-                else if (choice == 3) { // Inspect Warden
-                    std::cout << "  [INSPECT] Warden HP: " << wardenHP << "/" << kWardenStartHP
-                        << " | Base Attack: " << kWardenAttackDmg << "\n";
-                    // FREE action — loop continues without advancing turn
-                }
-                else if (choice == 4) { // Flee
-                    std::cout << "  You flee from the Warden!\n";
-                    return BattleOutcome::Fled;
-                }
+            }
+            return wardenHP <= 0
+                ? BatlleOutcome::Victory
+                / BattleOutcome::Defeat
 
-            }
-            // =====================================================================
-            // FLOOR 3 (Exceptions Requirement - Catch):
-            // Catch exceptions inside the battle loop to re-prompt without crashing.
-            // =====================================================================
-            catch (const BattleException& e) {
-                std::cout << "  [Error] " << e.what() << " Try again.\n";
-                continue;
-            }
-            catch (const BagException& e) {
-                std::cout << "  [Bag Error] " << e.what() << " Try again.\n";
-                continue;
-            }
-            catch (const std::exception& e) {
-                std::cout << "  [Error] " << e.what() << " Try again.\n";
-                continue;
-            }
-        }
-
-        if (wardenHP <= 0) {
-            std::cout << "\n=== VICTORY! The Warden has been defeated! ===\n";
-            return BattleOutcome::Victory;
-        }
-
-        std::cout << "\n=== DEFEAT! You were vanquished by the Warden... ===\n";
-        return BattleOutcome::Defeat;
-    }
+    // TODO — write the boss battle. Suggested outline (yours to refactor):
+    //
+    //   int playerHP = kPlayerStartHP;
+    //   int wardenHP = kWardenStartHP;
+    //
+    //   while (playerHP > 0 && wardenHP > 0) {
+    //       print state (HPs, last action — your choice).
+    //
+    //       try {
+    //           show menu (using your F0 container of actions).
+    //           read input.
+    //           if invalid → throw BattleException(...) [F3 — throw].
+    //           dispatch on the action:
+    //               Attack:    wardenHP -= kPlayerAttackDmg;
+    //                          if wardenHP > 0, playerHP -= kWardenAttackDmg.
+    //               Use item:  std::sort(hero.inventory.begin(),
+    //                                    hero.inventory.end(),
+    //                                    yourComparator)             [F2].
+    //                          show sorted menu, read item name.
+    //                          const Item* it = findByName<Item>(
+    //                              hero.inventory, name);             [F1]
+    //                          if (!it) throw BattleException(...);   [F3]
+    //                          apply effect (heal? buff next attack? …).
+    //                          end turn.
+    //               Inspect:   print warden state. FREE — do NOT end turn.
+    //               Flee:      return BattleOutcome::Fled.
+    //       }
+    //       catch (const std::exception& e) {                        [F3 — catch]
+    //           std::cout << "  " << e.what() << "  Try again.\n";
+    //           continue;   // re-prompt; turn does NOT advance
+    //       }
+    //   }
+    //
+    //   return wardenHP <= 0 ? BattleOutcome::Victory
+    //                        : BattleOutcome::Defeat;
+    //
+    // Decompose into helpers however you want. The contract main.cpp
+    // depends on is just runWardenBattle(Hero&).
+    //
+    // Replace the placeholder body below.
+}
 
 }  // namespace dungeon
