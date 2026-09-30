@@ -219,7 +219,7 @@ public:
     //     ++size_;
     void push_back(const T& value) {
         Node* n = new Node(value, tail_, nullptr);
-        if (tail_ != nullptr) tail_->next = n; 
+        // if (tail_ != nullptr) tail_->next = n; 
         else head_ = n; 
         tail_ = n;
         ++size_;
